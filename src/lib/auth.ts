@@ -6,7 +6,7 @@ export async function requireUser(req: Request) {
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) throw new Error('Authentication required.');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) throw new Error('Supabase environment variables are missing.');
   const client = createClient(url, anon, { auth: { autoRefreshToken: false, persistSession: false } });
   const { data, error } = await client.auth.getUser(token);
