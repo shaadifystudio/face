@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestSupabase, requireUser } from '@/lib/auth';
 import { requireUser } from '@/lib/auth';
 
 const BUCKET = process.env.SUPABASE_PHOTOS_BUCKET || 'wedding-photos';
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const photoIds = Array.isArray(body?.photoIds) ? body.photoIds.map(String) : [];
     if (!weddingId || !photoIds.length) return NextResponse.json({ error: 'weddingId and photoIds are required' }, { status: 400 });
 
-    const supabase = createSupabaseAdmin();
+    const { client: supabase } = getRequestSupabase(req);
     const { data: photos, error } = await supabase
       .from('photos')
       .select('id,storage_path,weddings!inner(studios!inner(owner_id))')
