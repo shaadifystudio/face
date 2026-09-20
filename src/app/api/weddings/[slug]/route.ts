@@ -3,6 +3,21 @@ import { getRequestSupabase, requireUser } from '@/lib/auth';
 
 const BUCKET = process.env.SUPABASE_PHOTOS_BUCKET || 'wedding-photos';
 
+async function removeFaceIndex(weddingId: string) {
+  const workerUrl = process.env.AI_WORKER_URL;
+  const workerSecret = process.env.AI_WORKER_SECRET;
+  if (!workerUrl || !workerSecret) return;
+  const response = await fetch(`${workerUrl.replace(/\\/$/, '')}/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerSecret}` },
+    body: JSON.stringify({ wedding_id: weddingId }),
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(`Face index cleanup failed: ${await response.text()}`);
+  }
+}
+
 async function getOwnedWedding(req: Request, slug: string) {
   const user = await requireUser(req);
   const { client: supabase } = getRequestSupabase(req);
@@ -83,6 +98,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ slug:
       .eq('wedding_id', wedding.id);
 
     if (photoError) return NextResponse.json({ error: photoError.message }, { status: 500 });
+
+    await removeFaceIndex(wedding.id);
 
     const paths = (photos || []).map(p => p.storage_path).filter(Boolean);
     if (paths.length) {
