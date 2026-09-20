@@ -8,7 +8,7 @@ async function getOwnedWedding(req: Request, slug: string) {
   const { client: supabase } = getRequestSupabase(req);
   const { data: wedding, error } = await supabase
     .from('weddings')
-    .select('id,slug,couple_name,wedding_date,status,photo_count,face_count,created_at,studios!inner(owner_id)')
+    .select('id,slug,couple_name,wedding_date,status,photo_count,face_count,client_enabled,client_face_search,client_all_photos,client_downloads,client_favourites,created_at,studios!inner(owner_id)')
     .eq('slug', slug)
     .single();
   if (error || !wedding || (wedding as any).studios?.owner_id !== user.id) return { user, supabase, wedding: null };
@@ -40,6 +40,34 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     return NextResponse.json({ wedding, photos: photoRows });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not load wedding.' }, { status: 401 });
+  }
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+  try {
+    const { slug } = await params;
+    const { supabase, wedding } = await getOwnedWedding(req, slug);
+    if (!wedding) return NextResponse.json({ error: 'Wedding not found.' }, { status: 404 });
+
+    const body = await req.json();
+    const allowed = ['client_enabled', 'client_face_search', 'client_all_photos', 'client_downloads', 'client_favourites'] as const;
+    const updates: Record<string, boolean> = {};
+    for (const key of allowed) {
+      if (typeof body?.[key] === 'boolean') updates[key] = body[key];
+    }
+    if (!Object.keys(updates).length) return NextResponse.json({ error: 'No access settings supplied.' }, { status: 400 });
+
+    const { data: updated, error } = await supabase
+      .from('weddings')
+      .update(updates)
+      .eq('id', wedding.id)
+      .select('id,slug,couple_name,wedding_date,status,photo_count,face_count,client_enabled,client_face_search,client_all_photos,client_downloads,client_favourites')
+      .single();
+
+    if (error || !updated) return NextResponse.json({ error: error?.message || 'Could not update client access.' }, { status: 500 });
+    return NextResponse.json({ wedding: updated });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not update client access.' }, { status: 500 });
   }
 }
 
