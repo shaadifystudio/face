@@ -25,8 +25,10 @@ export default function NewWedding(){
         const batch=items.slice(start,start+chunkSize);
         const prep=await fetch('/api/upload',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${accessToken}`},body:JSON.stringify({weddingId,files:batch.map(x=>({name:x.file.name,size:x.file.size,type:x.file.type}))})});
         const prepared=await prep.json(); if(!prep.ok) throw new Error(prepared.error||'Could not prepare uploads.');
-        for(const u of prepared.uploads){
-          const item=batch.find(x=>x.file.name===u.name && x.status==='waiting'); if(!item) continue;
+        for(let i=0;i<prepared.uploads.length;i++){
+          const u=prepared.uploads[i];
+          const item=batch[i];
+          if(!item) continue;
           setItems(prev=>prev.map(x=>x.id===item.id?{...x,status:'uploading'}:x));
           const {error}=await supabase.storage.from(prepared.bucket).uploadToSignedUrl(u.path,u.token,item.file);
           if(error){setItems(prev=>prev.map(x=>x.id===item.id?{...x,status:'failed',error:error.message}:x)); throw error;}
