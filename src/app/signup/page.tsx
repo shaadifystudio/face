@@ -31,6 +31,11 @@ export default function Signup() {
         return;
       }
 
+      await fetch('/api/studio/bootstrap', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${data.session.access_token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: name || 'My Studio' }),
+      });
       localStorage.setItem('shaadify_user', JSON.stringify({
         name: name || 'Photographer',
         email,
