@@ -1,6 +1,9 @@
 import hashlib
+import io
 import os
 from typing import List
+
+from PIL import Image
 
 import boto3
 import requests
@@ -59,6 +62,26 @@ def signed_photo_url(storage_path: str) -> str:
     signed = supabase.storage.from_(BUCKET).create_signed_url(storage_path, 3600)
     return signed.get('signedURL') or signed.get('signedUrl') or ''
 
+
+def rekognition_safe_bytes(image: bytes) -> bytes:
+    # Rekognition Image APIs accept raw image bytes up to 5 MB.
+    if len(image) <= 4_500_000:
+        return image
+    try:
+        source = Image.open(io.BytesIO(image)).convert("RGB")
+    except Exception as exc:
+        raise RuntimeError(f"Unsupported or unreadable image: {exc}")
+    source.thumbnail((6000, 6000), Image.Resampling.LANCZOS)
+    quality = 90
+    while quality >= 55:
+        out = io.BytesIO()
+        source.save(out, format="JPEG", quality=quality, optimize=True)
+        data = out.getvalue()
+        if len(data) <= 4_500_000:
+            return data
+        quality -= 5
+    raise RuntimeError("Could not reduce image below the Rekognition 5 MB input limit.")
+
 def mock_face_id(image: bytes) -> str:
     return 'mock-' + hashlib.sha256(image).hexdigest()[:32]
 
@@ -70,7 +93,7 @@ def index_mock(wedding_id: str, photo_id: str, image: bytes):
 def index_aws(wedding_id: str, photo_id: str, image: bytes):
     cid = collection_id(wedding_id)
     ensure_collection(cid)
-    result = rekognition.index_faces(CollectionId=cid, Image={'Bytes': image}, ExternalImageId=photo_id, DetectionAttributes=[], MaxFaces=100, QualityFilter='AUTO')
+    result = rekognition.index_faces(CollectionId=cid, Image={'Bytes': rekognition_safe_bytes(image)}, ExternalImageId=photo_id, DetectionAttributes=[], MaxFaces=100, QualityFilter='AUTO')
     rows = []
     for record in result.get('FaceRecords', []):
         face = record.get('Face', {})
@@ -134,7 +157,7 @@ def search(req: SearchRequest, authorization: str | None = Header(default=None))
     if FACE_PROVIDER == 'aws':
         cid = collection_id(req.wedding_id)
         try:
-            result = rekognition.search_faces_by_image(CollectionId=cid, Image={'Bytes': selfie}, MaxFaces=100, FaceMatchThreshold=req.threshold)
+            result = rekognition.search_faces_by_image(CollectionId=cid, Image={'Bytes': rekognition_safe_bytes(selfie)}, MaxFaces=100, FaceMatchThreshold=req.threshold)
         except rekognition.exceptions.InvalidParameterException as exc:
             raise HTTPException(status_code=422, detail=str(exc))
         matches = result.get('FaceMatches', [])
