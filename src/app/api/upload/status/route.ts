@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getRequestSupabase, requireUser } from '@/lib/auth';
-import { requireUser } from '@/lib/auth';
 export async function GET(req: Request) {
   let user; try { user = await requireUser(req); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Authentication required.' }, { status: 401 }); }
   const url = new URL(req.url); const weddingId = url.searchParams.get('weddingId'); if (!weddingId) return NextResponse.json({ error: 'weddingId is required' }, { status: 400 });
