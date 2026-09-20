@@ -33,9 +33,9 @@ export default function ClientSearch() {
   const [lightbox, setLightbox] = useState<Photo | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(\`shaadify-favourites-\${slug}\`);
+    const saved = window.localStorage.getItem(`shaadify-favourites-${slug}`);
     if (saved) { try { setFavourites(JSON.parse(saved)); } catch {} }
-    fetch(\`/api/client/weddings/\${encodeURIComponent(slug)}\`, { cache: 'no-store' })
+    fetch(`/api/client/weddings/${encodeURIComponent(slug)}`, { cache: 'no-store' })
       .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'This wedding link is unavailable.'); setSettings(d.wedding); })
       .catch(e => setError(e instanceof Error ? e.message : 'This wedding link is unavailable.'))
       .finally(() => setLoading(false));
@@ -44,7 +44,7 @@ export default function ClientSearch() {
   useEffect(() => {
     if (tab !== 'gallery' || !settings?.client_all_photos || gallery.length) return;
     setGalleryLoading(true); setError('');
-    fetch(\`/api/client/weddings/\${encodeURIComponent(slug)}/photos\`, { cache: 'no-store' })
+    fetch(`/api/client/weddings/${encodeURIComponent(slug)}/photos`, { cache: 'no-store' })
       .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not load gallery.'); setGallery(d.photos || []); })
       .catch(e => setError(e instanceof Error ? e.message : 'Could not load gallery.'))
       .finally(() => setGalleryLoading(false));
@@ -62,7 +62,7 @@ export default function ClientSearch() {
     if (!settings?.client_favourites) return;
     const next = favourites.includes(id) ? favourites.filter(x => x !== id) : [...favourites, id];
     setFavourites(next);
-    window.localStorage.setItem(\`shaadify-favourites-\${slug}\`, JSON.stringify(next));
+    window.localStorage.setItem(`shaadify-favourites-${slug}`, JSON.stringify(next));
   }
 
   async function searchFace() {
@@ -70,7 +70,7 @@ export default function ClientSearch() {
     setSearching(true); setError(''); setMatches([]);
     try {
       const form = new FormData(); form.append('selfie', file);
-      const r = await fetch(\`/api/client/weddings/\${encodeURIComponent(slug)}/search\`, { method: 'POST', body: form });
+      const r = await fetch(`/api/client/weddings/${encodeURIComponent(slug)}/search`, { method: 'POST', body: form });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Face search failed.');
       setMatches(d.matches || []);
     } catch (e) { setError(e instanceof Error ? e.message : 'Face search failed.'); }
@@ -99,8 +99,8 @@ export default function ClientSearch() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div><div className="uppercase tracking-[.25em] text-xs text-[#A69A8B]">Your private gallery</div><h1 className="serif text-5xl md:text-7xl mt-3">Find your moments.</h1><p className="text-[#756e67] mt-3 max-w-xl">Search your wedding by face or browse the full gallery when the photographer allows it.</p></div>
           <div className="flex rounded-full bg-white border border-black/5 p-1 self-start md:self-auto">
-            <button onClick={() => setTab('search')} className={\`px-5 py-2.5 rounded-full text-sm \${tab === 'search' ? 'bg-[#171514] text-white' : 'text-[#756e67]'}\`}>Face Search</button>
-            {settings.client_all_photos && <button onClick={() => setTab('gallery')} className={\`px-5 py-2.5 rounded-full text-sm \${tab === 'gallery' ? 'bg-[#171514] text-white' : 'text-[#756e67]'}\`}>All Photos</button>}
+            <button onClick={() => setTab('search')} className={`px-5 py-2.5 rounded-full text-sm ${tab === 'search' ? 'bg-[#171514] text-white' : 'text-[#756e67]'}`}>Face Search</button>
+            {settings.client_all_photos && <button onClick={() => setTab('gallery')} className={`px-5 py-2.5 rounded-full text-sm ${tab === 'gallery' ? 'bg-[#171514] text-white' : 'text-[#756e67]'}`}>All Photos</button>}
           </div>
         </div>
 
@@ -134,7 +134,7 @@ export default function ClientSearch() {
                 </button>
                 <div className="absolute inset-x-0 bottom-0 p-3 flex justify-between items-end bg-gradient-to-t from-black/65 via-black/10 to-transparent pt-14 opacity-0 group-hover:opacity-100 transition-opacity">
                   {settings.client_favourites ? <button type="button" onClick={() => toggleFavourite(photo.id)} className="h-10 w-10 rounded-full bg-white/95 text-lg shadow-sm">{favourites.includes(photo.id) ? '♥' : '♡'}</button> : <span />}
-                  {settings.client_downloads && <a href={\`/api/client/weddings/\${encodeURIComponent(slug)}/photos/\${encodeURIComponent(photo.id)}/download\`} onClick={e => e.stopPropagation()} className="px-4 py-2 rounded-full bg-white/95 text-xs font-medium shadow-sm">Download</a>}
+                  {settings.client_downloads && <a href={`/api/client/weddings/${encodeURIComponent(slug)}/photos/${encodeURIComponent(photo.id)}/download`} onClick={e => e.stopPropagation()} className="px-4 py-2 rounded-full bg-white/95 text-xs font-medium shadow-sm">Download</a>}
                 </div>
               </article>
             ))}
