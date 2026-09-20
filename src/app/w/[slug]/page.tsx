@@ -51,6 +51,7 @@ export default function WeddingWorkspace() {
   const [uploadComplete, setUploadComplete] = useState(0);
   const [progress, setProgress] = useState({ total: 0, indexed: 0, processing: 0, failed: 0, percent: 0 });
   const [savingAccess, setSavingAccess] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
 
   async function getSession() {
     const supabase = createSupabaseBrowserClient();
@@ -138,6 +139,28 @@ export default function WeddingWorkspace() {
           authorization: `Bearer ${session.access_token}`,
           'content-type': 'application/json',
         },
+        body: JSON.stringify({ [key]: value }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not update client access.');
+      setWedding(result.wedding);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update client access.');
+    } finally {
+      setSavingAccess(false);
+    }
+  }
+
+  async function updateClientAccess(key: 'client_enabled' | 'client_face_search' | 'client_all_photos' | 'client_downloads' | 'client_favourites', value: boolean) {
+    if (!wedding || savingAccess) return;
+    const session = await getSession();
+    if (!session) return;
+    setSavingAccess(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/weddings/${encodeURIComponent(wedding.slug)}`, {
+        method: 'PATCH',
+        headers: { authorization: `Bearer ${session.access_token}`, 'content-type': 'application/json' },
         body: JSON.stringify({ [key]: value }),
       });
       const result = await response.json();
@@ -334,6 +357,43 @@ export default function WeddingWorkspace() {
                 </button>
               </div>
             </div>
+
+            <section className="mt-10">
+              <div className="bg-white rounded-[28px] border border-black/5 p-5 md:p-8 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[.22em] text-[#A69A8B]">Client access & privacy</p>
+                    <h2 className="serif text-3xl md:text-4xl mt-2">Control what clients can see</h2>
+                    <p className="text-sm text-[#8a8179] mt-1">Changes apply immediately to the private client link.</p>
+                  </div>
+                  <div className="text-xs text-[#8a8179]">{savingAccess ? 'Saving…' : 'Auto-saved'}</div>
+                </div>
+                <div className="mt-7 divide-y divide-black/5">
+                  {([
+                    ['client_enabled', 'Client access', 'Allow this wedding link to be opened by clients.', wedding.client_enabled],
+                    ['client_face_search', 'Face Search', 'Let guests upload a selfie to find photos they appear in.', wedding.client_face_search],
+                    ['client_all_photos', 'Browse All Photos', 'Allow clients to browse the complete wedding gallery.', wedding.client_all_photos],
+                    ['client_downloads', 'Downloads', 'Allow clients to download photos from the gallery.', wedding.client_downloads],
+                    ['client_favourites', 'Favourites', 'Allow clients to mark and save favourite photos.', wedding.client_favourites],
+                  ] as const).map(([key, title, description, enabled]) => (
+                    <div key={key} className="flex items-center justify-between gap-5 py-5">
+                      <div>
+                        <div className="font-medium">{title}</div>
+                        <div className="text-sm text-[#8a8179] mt-1">{description}</div>
+                      </div>
+                      <button type="button" role="switch" aria-checked={enabled} disabled={savingAccess}
+                        onClick={() => updateClientAccess(key, !enabled)}
+                        className={`relative h-7 w-12 rounded-full transition-colors shrink-0 ${enabled ? 'bg-[#C9A875]' : 'bg-[#D8D3CC]'} disabled:opacity-60`}>
+                        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 rounded-2xl bg-[#F7F3ED] p-4 text-xs text-[#756e67]">
+                  <strong>Private by default:</strong> the client link never exposes the photographer dashboard or biometric records.
+                </div>
+              </div>
+            </section>
 
             <section className="mt-10">
               <div className="bg-white rounded-[28px] border border-black/5 p-5 md:p-8 shadow-sm">
