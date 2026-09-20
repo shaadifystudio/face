@@ -92,6 +92,24 @@ export default function Dashboard() {
     window.location.href = '/';
   }
 
+  async function deleteWedding(slug: string, coupleName: string) {
+    if (!window.confirm(`Delete ${coupleName}? This will permanently delete the wedding and its uploaded photos.`)) return;
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) { window.location.href = '/login'; return; }
+      const response = await fetch(`/api/weddings/${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${session.session.access_token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not delete wedding.');
+      setWeddings(current => current.filter(w => w.slug !== slug));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete wedding.');
+    }
+  }
+
   async function copyClientLink(slug: string) {
     await navigator.clipboard?.writeText(`${window.location.origin}/w/${slug}/search`);
   }
@@ -239,6 +257,12 @@ export default function Dashboard() {
                         className="rounded-full border border-black/10 px-4 py-2.5 text-sm"
                       >
                         Copy link
+                      </button>
+                      <button
+                        onClick={() => deleteWedding(w.slug, w.couple_name)}
+                        className="rounded-full border border-red-200 text-red-600 px-4 py-2.5 text-sm hover:bg-red-50"
+                      >
+                        Delete
                       </button>
                     </div>
                   </article>
