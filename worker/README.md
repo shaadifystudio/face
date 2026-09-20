@@ -2,70 +2,62 @@
 
 Python FastAPI worker for indexing wedding photos and searching a client's selfie.
 
-## Production provider: CompreFace
+## Default free MVP provider: dlib
 
-Shaadify can use a self-hosted CompreFace server instead of a per-request cloud face API. CompreFace exposes REST endpoints for adding known images and recognizing faces; the worker maps each photo to a wedding-scoped subject (`wedding_id:photo_id`).
+The free MVP uses the face_recognition Python library backed by dlib.
 
-Set these worker variables:
+The dlib library is Boost-licensed and the dlib recognition model is released into the public domain by its creator. See the upstream model repository before commercial launch for provenance and any applicable obligations.
 
-```
-FACE_PROVIDER=compreface
-COMPRE_FACE_URL=https://face.yourdomain.com
-COMPRE_FACE_API_KEY=YOUR_FACE_RECOGNITION_SERVICE_KEY
-COMPRE_FACE_MIN_SIMILARITY=0.75
-COMPRE_FACE_PREDICTION_COUNT=1000
+Set:
+
+FACE_PROVIDER=dlib
+DLIB_MAX_DISTANCE=0.6
+DLIB_MAX_IMAGE_SIDE=2400
 
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_PHOTOS_BUCKET=wedding-photos
 AI_WORKER_SECRET=...
-```
 
-CompreFace accepts image uploads up to 5 MB, so the worker automatically normalizes larger wedding images/selfies before sending them to the face service.
+The worker detects faces with dlib's CPU HOG detector and stores 128-dimensional face encodings in the server-only face_embeddings table. Client selfies are processed in memory and are not persisted by Shaadify.
 
-### Install CompreFace
+## Important MVP limitation
 
-CompreFace is distributed as Docker Compose and supports CPU deployments on x86 machines with AVX support.
+The current dlib implementation performs a wedding-scoped linear scan over stored face embeddings. This is intentionally simple for the first free deployment and is suitable for testing/small galleries. Before large commercial weddings, move embeddings to a proper vector index (for example pgvector) and benchmark thresholds on representative wedding imagery.
 
-Use the official CompreFace release/docker-compose package, create a Face Recognition Service, and copy its API key into `COMPRE_FACE_API_KEY`. The setup flow is: start CompreFace → create an application → create a Face Recognition Service → use its API key with the REST API.
+## Cloud Run
 
-For privacy, review the CompreFace `save_images_to_db` setting. It controls whether uploaded images are saved by CompreFace; Shaadify already keeps the original wedding files in Supabase Storage.
+The container is designed for Google Cloud Run:
 
-## How Shaadify maps photos
+- Port: 8080 (Cloud Run supplies PORT)
+- CPU: 2
+- Memory: 4 GiB
+- Minimum instances: 0
+- Maximum instances: 1 for the first free-tier test
+- Region: asia-south1 (Mumbai)
 
-Each wedding photo is stored as a CompreFace subject:
-
-```
-<wedding_id>:<photo_id>
-```
-
-This means recognition results can be filtered to the current wedding even though one CompreFace service is shared across weddings. CompreFace also supports using a photo containing multiple people as a subject and then finding photos containing the searched person.
-
-The worker stores the returned CompreFace `image_id` in `face_embeddings.provider_face_id`.
+Keep the worker protected with AI_WORKER_SECRET. Do not put SUPABASE_SERVICE_ROLE_KEY or AI_WORKER_SECRET in the frontend.
 
 ## Endpoints
 
-```
 GET  /health
 POST /enqueue
 POST /search
 POST /search-image
 POST /delete
-```
 
-- `/enqueue` indexes uploaded wedding photos in the background.
-- `/search` searches from a signed selfie URL.
-- `/search-image` searches directly from selfie bytes.
-- `/delete` removes the CompreFace face records for one photo or an entire wedding.
+- /enqueue indexes uploaded wedding photos in a background task.
+- /search searches from a signed selfie URL.
+- /search-image searches directly from selfie bytes.
+- /delete is a no-op for dlib because its face index is the Supabase face_embeddings rows; photo/wedding deletion removes those rows through the database relationships.
 
-## Development
+## Legacy providers
 
-For plumbing-only testing, `FACE_PROVIDER=mock` is still available. It is **not** facial recognition.
+The worker still contains the previous aws, compreface, and mock providers behind the same interface. They are not the default.
 
-## Legacy AWS provider
+## Privacy
 
-The worker retains the previous `FACE_PROVIDER=aws` implementation, but production Shaadify should use `compreface` for the self-hosted deployment described above.
-
-## Production scaling
-
-The current FastAPI `BackgroundTasks` path is suitable for the MVP. At larger wedding volumes, replace it with a durable queue/worker system so thousands of photos can be processed reliably across restarts.
+- Original wedding photos remain in the private Supabase Storage bucket.
+- Face embeddings are server-side only.
+- Client selfies are processed in memory and are not intentionally stored.
+- Deleting a photo or wedding removes the associated database face records through the existing foreign-key cascades.
