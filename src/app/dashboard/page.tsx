@@ -79,10 +79,10 @@ export default function Dashboard() {
           <nav className="space-y-2 text-sm">
             <div className="px-4 py-3 rounded-xl bg-[#171514] text-white">Dashboard</div>
             <Link href="/weddings/new" className="block px-4 py-3 rounded-xl text-[#756e67] hover:bg-white">New wedding</Link>
-            <div className="px-4 py-3 rounded-xl text-[#756e67]">Clients</div>
-            <div className="px-4 py-3 rounded-xl text-[#756e67]">Storage</div>
-            <div className="px-4 py-3 rounded-xl text-[#756e67]">Billing</div>
-            <div className="px-4 py-3 rounded-xl text-[#756e67]">Settings</div>
+            <Link href="/clients" className="block px-4 py-3 rounded-xl text-[#756e67] hover:bg-white">Clients</Link>
+            <Link href="/storage" className="block px-4 py-3 rounded-xl text-[#756e67] hover:bg-white">Storage</Link>
+            <Link href="/billing" className="block px-4 py-3 rounded-xl text-[#756e67] hover:bg-white">Billing</Link>
+            <Link href="/settings" className="block px-4 py-3 rounded-xl text-[#756e67] hover:bg-white">Settings</Link>
           </nav>
         </aside>
 
