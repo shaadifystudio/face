@@ -19,6 +19,11 @@ export default function Login() {
       const supabase = createSupabaseBrowserClient();
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      await fetch('/api/studio/bootstrap', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${data.session.access_token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: data.user.user_metadata?.full_name || 'My Studio' }),
+      });
       localStorage.setItem('shaadify_user', JSON.stringify({
         name: data.user.user_metadata?.full_name || 'Photographer',
         email: data.user.email || email,
@@ -53,7 +58,8 @@ export default function Login() {
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
           </div>
-          <p className="text-sm text-[#756e67] mt-6">New to Shaadify? <Link href="/signup" className="underline">Create your studio</Link></p>
+          <p className="text-sm text-[#756e67] mt-5"><Link href="/forgot-password" className="underline">Forgot password?</Link></p>
+          <p className="text-sm text-[#756e67] mt-3">New to Shaadify? <Link href="/signup" className="underline">Create your studio</Link></p>
         </div>
       </div>
     </main>
