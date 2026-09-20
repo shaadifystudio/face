@@ -93,7 +93,7 @@ def compreface_headers():
 
 
 def compreface_url(path: str) -> str:
-    return f'{COMPRE_FACE_URL}/api/v1/recognition/{path.lstrip('/')}'
+    return f"{COMPRE_FACE_URL}/api/v1/recognition/{path.lstrip('/')}"
 
 
 def compreface_add(wedding_id: str, photo_id: str, image: bytes) -> str:
