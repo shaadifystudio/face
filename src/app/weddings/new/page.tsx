@@ -36,7 +36,7 @@ export default function NewWedding(){
         const done=await fetch('/api/upload/complete',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${accessToken}`},body:JSON.stringify({weddingId,photoIds})});
         const result=await done.json(); if(!done.ok) throw new Error(result.error||'Could not queue processing.');
       }
-      setMessage('Upload complete. AI processing has been queued.');
+      setMessage('Upload complete. Your photos are safely stored. Face recognition is not connected yet, so no AI processing is running.');
       r.push(`/w/${created.wedding.slug}?weddingId=${weddingId}`);
     } catch(e){ setMessage(e instanceof Error?e.message:'Something went wrong.'); setBusy(false); }
   };
