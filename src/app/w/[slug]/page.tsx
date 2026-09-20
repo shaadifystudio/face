@@ -34,22 +34,17 @@ export default function WeddingWorkspace() {
         return;
       }
       const headers = { authorization: `Bearer ${session.session.access_token}` };
-      const [workspaceResponse, statusResponse] = await Promise.all([
-        fetch(`/api/weddings/${params.slug}`, { headers, cache: 'no-store' }),
-        fetch(`/api/upload/status?weddingId=${encodeURIComponent(wedding?.id || '')}`, { headers, cache: 'no-store' }),
-      ]);
+      const workspaceResponse = await fetch(`/api/weddings/${params.slug}`, { headers, cache: 'no-store' });
       const workspace = await workspaceResponse.json();
       if (!workspaceResponse.ok) throw new Error(workspace.error || 'Could not load wedding.');
       setWedding(workspace.wedding);
       setPhotos(workspace.photos || []);
 
       if (workspace.wedding?.id) {
-        const statusRes = statusResponse.ok && wedding?.id === workspace.wedding.id
-          ? statusResponse
-          : await fetch(`/api/upload/status?weddingId=${encodeURIComponent(workspace.wedding.id)}`, { headers, cache: 'no-store' });
+        const statusRes = await fetch(`/api/upload/status?weddingId=${encodeURIComponent(workspace.wedding.id)}`, { headers, cache: 'no-store' });
         if (statusRes.ok) {
           const status = await statusRes.json();
-          setProgress(status.progress || { total: 0, indexed: 0, processing: 0, failed: 0, percent: 0 });
+          setProgress(status.progress || { total: 0, indexed: 0, processing: 0, queued: 0, failed: 0, percent: 0 });
         }
       }
     } catch (e) {
