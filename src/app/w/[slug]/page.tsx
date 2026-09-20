@@ -96,9 +96,10 @@ export default function WeddingWorkspace() {
                   {wedding.wedding_date ? ` · ${new Date(wedding.wedding_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 <button onClick={() => navigator.clipboard?.writeText(location.origin + `/w/${wedding.slug}/search`)} className="rounded-full border border-black/10 px-5 py-3">Copy client link</button>
                 <Link href="/weddings/new" className="rounded-full bg-[#171514] text-white px-5 py-3">Add wedding</Link>
+                <Link href={`/weddings/new?addTo=${wedding.slug}`} className="rounded-full border border-black/10 px-5 py-3">Upload more photos</Link>
               </div>
             </div>
 
