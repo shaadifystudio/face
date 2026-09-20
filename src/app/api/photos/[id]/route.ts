@@ -3,6 +3,21 @@ import { getRequestSupabase, requireUser } from '@/lib/auth';
 
 const BUCKET = process.env.SUPABASE_PHOTOS_BUCKET || 'wedding-photos';
 
+async function removeFaceIndex(weddingId: string, photoId: string) {
+  const workerUrl = process.env.AI_WORKER_URL;
+  const workerSecret = process.env.AI_WORKER_SECRET;
+  if (!workerUrl || !workerSecret) return;
+  const response = await fetch(`${workerUrl.replace(/\\/$/, '')}/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerSecret}` },
+    body: JSON.stringify({ wedding_id: weddingId, photo_id: photoId }),
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(`Face index cleanup failed: ${await response.text()}`);
+  }
+}
+
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(req);
@@ -18,6 +33,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (error || !photo || (photo as any).weddings?.studios?.owner_id !== user.id) {
       return NextResponse.json({ error: 'Photo not found.' }, { status: 404 });
     }
+
+    await removeFaceIndex(photo.wedding_id, id);
 
     const { error: storageError } = await supabase.storage.from(BUCKET).remove([photo.storage_path]);
     if (storageError) {
