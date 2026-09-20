@@ -12,7 +12,11 @@ from pydantic import BaseModel
 from supabase import create_client, Client
 
 app = FastAPI(title='Shaadify Face AI Worker')
-FACE_PROVIDER = os.getenv('FACE_PROVIDER', 'mock').lower()
+FACE_PROVIDER = os.getenv('FACE_PROVIDER', 'compreface').lower()
+COMPRE_FACE_URL = os.getenv('COMPRE_FACE_URL', '').rstrip('/')
+COMPRE_FACE_API_KEY = os.getenv('COMPRE_FACE_API_KEY', '')
+COMPRE_FACE_MIN_SIMILARITY = float(os.getenv('COMPRE_FACE_MIN_SIMILARITY', '0.75'))
+COMPRE_FACE_PREDICTION_COUNT = int(os.getenv('COMPRE_FACE_PREDICTION_COUNT', '1000'))
 AWS_REGION = os.getenv('AWS_REGION', 'ap-south-1')
 BUCKET = os.getenv('SUPABASE_PHOTOS_BUCKET', 'wedding-photos')
 COLLECTION_PREFIX = os.getenv('AWS_REKOGNITION_COLLECTION', 'shaadify-face-v1')
@@ -82,6 +86,100 @@ def rekognition_safe_bytes(image: bytes) -> bytes:
         quality -= 5
     raise RuntimeError("Could not reduce image below the Rekognition 5 MB input limit.")
 
+def compreface_headers():
+    if not COMPRE_FACE_URL or not COMPRE_FACE_API_KEY:
+        raise RuntimeError('CompreFace URL/API key are missing.')
+    return {'x-api-key': COMPRE_FACE_API_KEY}
+
+
+def compreface_url(path: str) -> str:
+    return f'{COMPRE_FACE_URL}/api/v1/recognition/{path.lstrip('/')}'
+
+
+def compreface_add(wedding_id: str, photo_id: str, image: bytes) -> str:
+    subject = f'{wedding_id}:{photo_id}'
+    response = requests.post(
+        compreface_url('faces'),
+        params={'subject': subject, 'det_prob_threshold': 0.7},
+        headers=compreface_headers(),
+        files={'file': ('photo.jpg', rekognition_safe_bytes(image), 'image/jpeg')},
+        timeout=180,
+    )
+    response.raise_for_status()
+    data = response.json()
+    image_id = data.get('image_id')
+    if not image_id:
+        raise RuntimeError(f'CompreFace did not return an image_id: {data}')
+    return image_id
+
+
+def compreface_delete_image(image_id: str):
+    response = requests.delete(
+        compreface_url(f'faces/{image_id}'),
+        headers=compreface_headers(),
+        timeout=60,
+    )
+    if response.status_code not in (200, 204, 404):
+        response.raise_for_status()
+
+
+def compreface_delete_images(image_ids: List[str]):
+    ids = [value for value in image_ids if value]
+    for start in range(0, len(ids), 100):
+        chunk = ids[start:start + 100]
+        response = requests.post(
+            compreface_url('faces/delete'),
+            headers={**compreface_headers(), 'Content-Type': 'application/json'},
+            json=chunk,
+            timeout=120,
+        )
+        response.raise_for_status()
+
+
+def index_compreface(wedding_id: str, photo_id: str, image: bytes):
+    if supabase is None:
+        raise RuntimeError('Supabase worker credentials are missing.')
+    existing = supabase.table('face_embeddings').select('provider_face_id').eq('photo_id', photo_id).execute().data or []
+    compreface_delete_images([row['provider_face_id'] for row in existing])
+    supabase.table('face_embeddings').delete().eq('photo_id', photo_id).execute()
+    image_id = compreface_add(wedding_id, photo_id, image)
+    supabase.table('face_embeddings').insert({
+        'wedding_id': wedding_id,
+        'photo_id': photo_id,
+        'provider_face_id': image_id,
+        'bbox': None,
+        'embedding': {'provider': 'compreface', 'subject': f'{wedding_id}:{photo_id}'},
+    }).execute()
+
+
+def search_compreface(image: bytes, wedding_id: str, threshold: float):
+    minimum = threshold / 100 if threshold > 1 else threshold
+    minimum = max(0.0, min(1.0, minimum))
+    response = requests.post(
+        compreface_url('recognize'),
+        params={
+            'limit': 0,
+            'prediction_count': COMPRE_FACE_PREDICTION_COUNT,
+            'det_prob_threshold': 0.7,
+        },
+        headers=compreface_headers(),
+        files={'file': ('selfie.jpg', rekognition_safe_bytes(image), 'image/jpeg')},
+        timeout=180,
+    )
+    response.raise_for_status()
+    data = response.json()
+    matches = {}
+    prefix = f'{wedding_id}:'
+    for face in data.get('result', []):
+        for subject in face.get('subjects', []):
+            name = subject.get('subject', '')
+            similarity = float(subject.get('similarity', 0))
+            if name.startswith(prefix) and similarity >= minimum:
+                photo_id = name[len(prefix):]
+                matches[photo_id] = max(similarity, matches.get(photo_id, 0))
+    return matches
+
+
 def mock_face_id(image: bytes) -> str:
     return 'mock-' + hashlib.sha256(image).hexdigest()[:32]
 
@@ -116,6 +214,8 @@ def process_photo(wedding_id: str, photo_id: str):
         image = download(url)
         if FACE_PROVIDER == 'aws':
             index_aws(wedding_id, photo_id, image)
+        elif FACE_PROVIDER == 'compreface':
+            index_compreface(wedding_id, photo_id, image)
         else:
             index_mock(wedding_id, photo_id, image)
         supabase.table('photos').update({'status': 'indexed'}).eq('id', photo_id).execute()
@@ -154,7 +254,10 @@ def search(req: SearchRequest, authorization: str | None = Header(default=None))
     if supabase is None:
         raise HTTPException(status_code=500, detail='Worker Supabase credentials are missing.')
     selfie = download(req.selfie_url)
-    if FACE_PROVIDER == 'aws':
+    if FACE_PROVIDER == 'compreface':
+        scores = search_compreface(selfie, req.wedding_id, req.threshold)
+        photo_ids = list(scores.keys())
+    elif FACE_PROVIDER == 'aws':
         cid = collection_id(req.wedding_id)
         try:
             result = rekognition.search_faces_by_image(CollectionId=cid, Image={'Bytes': rekognition_safe_bytes(selfie)}, MaxFaces=100, FaceMatchThreshold=req.threshold)
@@ -184,7 +287,10 @@ async def search_image(image: bytes = Body(..., media_type='application/octet-st
         raise HTTPException(status_code=500, detail='Worker Supabase credentials are missing.')
     if not image:
         raise HTTPException(status_code=400, detail='Image is required.')
-    if FACE_PROVIDER != 'aws':
+    if FACE_PROVIDER == 'compreface':
+        scores = search_compreface(image, wedding_id, threshold)
+        photo_ids = list(scores.keys())
+    elif FACE_PROVIDER != 'aws':
         face_id = mock_face_id(image)
         rows = supabase.table('face_embeddings').select('photo_id').eq('wedding_id', wedding_id).eq('provider_face_id', face_id).execute().data or []
         photo_ids = [r['photo_id'] for r in rows]
@@ -207,3 +313,26 @@ async def search_image(image: bytes = Body(..., media_type='application/octet-st
         signed_url = signed.get('signedURL') or signed.get('signedUrl')
         results.append({'photoId': photo['id'], 'name': photo['original_name'], 'url': signed_url, 'similarity': scores.get(photo['id'])})
     return {'matches': results, 'provider': FACE_PROVIDER}
+
+class DeleteRequest(BaseModel):
+    wedding_id: str
+    photo_id: str | None = None
+
+
+@app.post('/delete')
+def delete_faces(req: DeleteRequest, authorization: str | None = Header(default=None)):
+    auth_or_401(authorization)
+    if supabase is None:
+        raise HTTPException(status_code=500, detail='Worker Supabase credentials are missing.')
+    if FACE_PROVIDER != 'compreface':
+        return {'deleted': 0, 'provider': FACE_PROVIDER}
+    query = supabase.table('face_embeddings').select('provider_face_id').eq('wedding_id', req.wedding_id)
+    if req.photo_id:
+        query = query.eq('photo_id', req.photo_id)
+    rows = query.execute().data or []
+    ids = [row['provider_face_id'] for row in rows]
+    compreface_delete_images(ids)
+    if req.photo_id:
+        return {'deleted': len(ids), 'photo_id': req.photo_id, 'provider': FACE_PROVIDER}
+    return {'deleted': len(ids), 'wedding_id': req.wedding_id, 'provider': FACE_PROVIDER}
+
