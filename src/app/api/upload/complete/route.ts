@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
     const workerUrl = process.env.AI_WORKER_URL;
     const workerSecret = process.env.AI_WORKER_SECRET;
-    let weddingStatus = 'uploaded';
+    let weddingStatus = 'created';
 
     if (workerUrl && workerSecret) {
       weddingStatus = 'processing';
