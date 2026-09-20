@@ -204,6 +204,42 @@ export default function WeddingWorkspace() {
     }
   }
 
+  async function deletePhoto(photo: Photo) {
+    if (!window.confirm(`Delete ${photo.original_name}? This photo will be permanently removed.`)) return;
+    try {
+      const session = await getSession();
+      if (!session) return;
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not delete photo.');
+      setPhotos(current => current.filter(item => item.id !== photo.id));
+      setWedding(current => current ? { ...current, photo_count: result.photoCount ?? Math.max(0, current.photo_count - 1) } : current);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete photo.');
+    }
+  }
+
+  async function deleteWedding() {
+    if (!wedding) return;
+    if (!window.confirm(`Delete ${wedding.couple_name}? This will permanently delete the wedding and all uploaded photos.`)) return;
+    try {
+      const session = await getSession();
+      if (!session) return;
+      const response = await fetch(`/api/weddings/${encodeURIComponent(wedding.slug)}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not delete wedding.');
+      window.location.href = '/dashboard';
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete wedding.');
+    }
+  }
+
   function clearFinished() {
     setQueue(current => current.filter(item => item.state === 'waiting' || item.state === 'uploading'));
   }
@@ -259,6 +295,12 @@ export default function WeddingWorkspace() {
                 <Link href="/weddings/new" className="rounded-full bg-[#171514] text-white px-5 py-3 text-sm">
                   Add wedding
                 </Link>
+                <button
+                  onClick={deleteWedding}
+                  className="rounded-full border border-red-200 bg-white text-red-600 px-5 py-3 text-sm hover:bg-red-50"
+                >
+                  Delete wedding
+                </button>
               </div>
             </div>
 
@@ -424,7 +466,16 @@ export default function WeddingWorkspace() {
                       </div>
                       <div className="p-3">
                         <div className="text-xs truncate">{photo.original_name}</div>
-                        <div className="text-[10px] text-[#8a8179] mt-1 capitalize">{photo.status}</div>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <div className="text-[10px] text-[#8a8179] capitalize">{photo.status}</div>
+                          <button
+                            onClick={() => deletePhoto(photo)}
+                            className="text-[10px] text-red-600 hover:underline"
+                            aria-label={`Delete ${photo.original_name}`}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
