@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getRequestSupabase, requireUser } from '@/lib/auth';
-import { requireUser } from '@/lib/auth';
 const BUCKET = process.env.SUPABASE_PHOTOS_BUCKET || 'wedding-photos'; const MAX_FILES_PER_REQUEST = 100; const MAX_FILE_BYTES = 50 * 1024 * 1024;
 function safeName(name: string) { return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''); }
 export async function POST(req: Request) {
