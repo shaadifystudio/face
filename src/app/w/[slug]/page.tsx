@@ -51,7 +51,6 @@ export default function WeddingWorkspace() {
   const [uploadComplete, setUploadComplete] = useState(0);
   const [progress, setProgress] = useState({ total: 0, indexed: 0, processing: 0, failed: 0, percent: 0 });
   const [savingAccess, setSavingAccess] = useState(false);
-  const [savingAccess, setSavingAccess] = useState(false);
 
   async function getSession() {
     const supabase = createSupabaseBrowserClient();
