@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestSupabase, requireUser } from '@/lib/auth';
 import { requireUser } from '@/lib/auth';
 
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const user = await requireUser(req);
     const { slug } = await params;
-    const supabase = createSupabaseAdmin();
+    const { client: supabase } = getRequestSupabase(req);
 
     const { data: wedding, error } = await supabase
       .from('weddings')
