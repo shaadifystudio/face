@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getRequestSupabase, requireUser } from '@/lib/auth';
 import { requireUser } from '@/lib/auth';
 const BUCKET = process.env.SUPABASE_PHOTOS_BUCKET || 'wedding-photos'; const MAX_FILES_PER_REQUEST = 100; const MAX_FILE_BYTES = 50 * 1024 * 1024;
 function safeName(name: string) { return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''); }
@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const user = await requireUser(req); const body = await req.json(); const weddingId = String(body?.weddingId || ''); const files = Array.isArray(body?.files) ? body.files : [];
     if (!weddingId || !files.length) return NextResponse.json({ error: 'weddingId and files are required' }, { status: 400 });
     if (files.length > MAX_FILES_PER_REQUEST) return NextResponse.json({ error: `Upload at most ${MAX_FILES_PER_REQUEST} files per batch.` }, { status: 400 });
-    const supabase = createSupabaseAdmin();
+    const { client: supabase } = getRequestSupabase(req);
     const { data: wedding, error: weddingError } = await supabase.from('weddings').select('id,studio_id,status,studios!inner(owner_id)').eq('id', weddingId).single();
     if (weddingError || !wedding || (wedding as any).studios?.owner_id !== user.id) return NextResponse.json({ error: 'Wedding not found.' }, { status: 404 });
     const results = [];
