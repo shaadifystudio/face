@@ -4,7 +4,7 @@ from typing import List
 
 import boto3
 import requests
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Body, Query
 from pydantic import BaseModel
 from supabase import create_client, Client
 
@@ -153,4 +153,34 @@ def search(req: SearchRequest, authorization: str | None = Header(default=None))
         signed = supabase.storage.from_(BUCKET).create_signed_url(photo['storage_path'], 3600)
         signed_url = signed.get('signedURL') or signed.get('signedUrl')
         results.append({'photoId': photo['id'],'name': photo['original_name'],'url': signed_url,'similarity': scores.get(photo['id'])})
+    return {'matches': results, 'provider': FACE_PROVIDER}
+@app.post('/search-image')
+async def search_image(image: bytes = Body(..., media_type='application/octet-stream'), wedding_id: str = Query(...), threshold: float = Query(90), authorization: str | None = Header(default=None)):
+    auth_or_401(authorization)
+    if supabase is None:
+        raise HTTPException(status_code=500, detail='Worker Supabase credentials are missing.')
+    if not image:
+        raise HTTPException(status_code=400, detail='Image is required.')
+    if FACE_PROVIDER != 'aws':
+        face_id = mock_face_id(image)
+        rows = supabase.table('face_embeddings').select('photo_id').eq('wedding_id', wedding_id).eq('provider_face_id', face_id).execute().data or []
+        photo_ids = [r['photo_id'] for r in rows]
+        scores = {pid: 100 for pid in photo_ids}
+    else:
+        cid = collection_id(wedding_id)
+        try:
+            result = rekognition.search_faces_by_image(CollectionId=cid, Image={'Bytes': image}, MaxFaces=100, FaceMatchThreshold=threshold)
+        except rekognition.exceptions.InvalidParameterException as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        matches = result.get('FaceMatches', [])
+        photo_ids = [m.get('Face', {}).get('ExternalImageId') for m in matches if m.get('Face', {}).get('ExternalImageId')]
+        scores = {m.get('Face', {}).get('ExternalImageId'): m.get('Similarity') for m in matches}
+    if not photo_ids:
+        return {'matches': [], 'provider': FACE_PROVIDER}
+    photos = supabase.table('photos').select('id,storage_path,original_name').eq('wedding_id', wedding_id).in_('id', photo_ids).execute().data or []
+    results = []
+    for photo in photos:
+        signed = supabase.storage.from_(BUCKET).create_signed_url(photo['storage_path'], 3600)
+        signed_url = signed.get('signedURL') or signed.get('signedUrl')
+        results.append({'photoId': photo['id'], 'name': photo['original_name'], 'url': signed_url, 'similarity': scores.get(photo['id'])})
     return {'matches': results, 'provider': FACE_PROVIDER}
