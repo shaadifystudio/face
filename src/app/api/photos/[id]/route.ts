@@ -7,7 +7,7 @@ async function removeFaceIndex(weddingId: string, photoId: string) {
   const workerUrl = process.env.AI_WORKER_URL;
   const workerSecret = process.env.AI_WORKER_SECRET;
   if (!workerUrl || !workerSecret) return;
-  const response = await fetch(`${workerUrl.replace(/\\/$/, '')}/delete`, {
+  const response = await fetch(`${(workerUrl.endsWith('/') ? workerUrl.slice(0, -1) : workerUrl)}/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerSecret}` },
     body: JSON.stringify({ wedding_id: weddingId, photo_id: photoId }),
