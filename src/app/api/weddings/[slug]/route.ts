@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getRequestSupabase, requireUser } from '@/lib/auth';
-import { requireUser } from '@/lib/auth';
 
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
