@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getRequestSupabase, requireUser } from '@/lib/auth';
-import { requireUser } from '@/lib/auth';
 
 const BUCKET = process.env.SUPABASE_PHOTOS_BUCKET || 'wedding-photos';
 
